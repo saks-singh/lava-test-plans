@@ -1,18 +1,97 @@
 {% extends "testcases/templates/master.jinja2" %}
 
 {% set test_name = "performance" %}
-{% set test_timeout = 90 %}
+{% set test_timeout = 240 %}
 
 {# Get excluded tests list from device file #}
 {% set EXCLUDED_TESTS = EXCLUDED_TESTS|default([]) %}
 
-{# Performance area: qcom-linux-testkit Runner/suites/Performance #}
-{# Boot_Systemd_KPI_Loop reboots the target, so it runs last #}
-{% set all_tests = [
+{# Performance area: qcom-linux-testkit Runner/suites/Performance              #}
+{#                                                                            #}
+{# The benchmark suites run in the order used for platform bring-up - CPU,     #}
+{# then OS primitives, memory, storage, scheduler, graphics, GPU+CPU,          #}
+{# real-time, sockets and HTTP - with the system checks first and              #}
+{# Boot_Systemd_KPI_Loop last, since it reboots the target. The groups below    #}
+{# are concatenated into all_tests; they are separate only so each can carry    #}
+{# a comment, which Jinja does not allow inside a set expression.               #}
+{#                                                                            #}
+{# "expected" is a WHITELIST: LAVA forces any case not named in it to fail.     #}
+{# Every suite here that publishes measurements derives its case ids from the   #}
+{# tool's own output - scene names, percentiles, block sizes, thread counts,    #}
+{# which engine was resolved - so the ids are not known before the run and the  #}
+{# key must be OMITTED. It is kept only where a suite publishes a single fixed  #}
+{# verdict case. That is also why Sysbench_Performance and Tiotest no longer    #}
+{# carry one: they now publish 24 and 144 measurements respectively, and a      #}
+{# whitelist would fail every one of them.                                      #}
+
+{# System checks that were already part of this plan #}
+{% set system_tests = [
     {"name": "Boot_Systemd_Validate", "path": "Runner/suites/Performance/Boot_Systemd_Validate/Boot_Systemd_Validate.yaml", "expected": ["Boot_Systemd_Validate"]},
     {"name": "Memory_Map", "path": "Runner/suites/Performance/Memory_Map/Memory_Map.yaml", "expected": ["Memory_Map"]},
-    {"name": "Sysbench_Performance", "path": "Runner/suites/Performance/Sysbench_Performance/Sysbench_Performance.yaml", "expected": ["Sysbench_Performance"]},
-    {"name": "Tiotest", "path": "Runner/suites/Performance/Tiotest/tiotest-performance.yaml", "expected": ["Tiotest"]},
-    {"name": "userspace-resource-manager", "path": "Runner/suites/Performance/userspace-resource-manager/userspace-resource-manager.yaml", "expected": ["userspace-resource-manager"]},
+    {"name": "userspace-resource-manager", "path": "Runner/suites/Performance/userspace-resource-manager/userspace-resource-manager.yaml", "expected": ["userspace-resource-manager"]}
+] %}
+
+{# CPU: iterations/sec, then the multicore/single-core workloads and scaling #}
+{% set cpu_tests = [
+    {"name": "Coremark", "path": "Runner/suites/Performance/Coremark/coremark.yaml"},
+    {"name": "CoremarkPro", "path": "Runner/suites/Performance/CoremarkPro/coremark-pro.yaml"}
+] %}
+
+{# Kernel / OS layer: thread, memory and file primitives #}
+{% set os_tests = [
+    {"name": "OSBench", "path": "Runner/suites/Performance/OSBench/osbench.yaml"},
+    {"name": "Sysbench_Performance", "path": "Runner/suites/Performance/Sysbench_Performance/Sysbench_Performance.yaml"}
+] %}
+
+{# Memory: lmbench latency and bandwidth, then RAMspeed #}
+{% set memory_tests = [
+    {"name": "DDR_Lmbench", "path": "Runner/suites/Performance/DDR_Lmbench/ddr-lmbench.yaml"},
+    {"name": "DDR_RAMspeed", "path": "Runner/suites/Performance/DDR_RAMspeed/ddr-ramspeed.yaml"}
+] %}
+
+{# Storage #}
+{% set storage_tests = [
+    {"name": "Tiotest", "path": "Runner/suites/Performance/Tiotest/tiotest-performance.yaml"}
+] %}
+
+{# Scheduler. Hackbench_Performance is the Performance counterpart to          #}
+{# Kernel/RT-tests/Hackbench: it searches rt-tests' install locations rather    #}
+{# than PATH alone, and can fall back to "perf bench sched messaging".         #}
+{% set scheduler_tests = [
+    {"name": "Threadbench", "path": "Runner/suites/Performance/Threadbench/threadbench.yaml"},
+    {"name": "Hackbench_Performance", "path": "Runner/suites/Performance/Hackbench_Performance/hackbench-performance.yaml"}
+] %}
+
+{# Graphics. Glmark2 here publishes the score; Multimedia/Graphics/X11_Glmark2 #}
+{# validates rendering in a desktop session and is part of the multimedia plan. #}
+{% set graphics_tests = [
+    {"name": "Glmark2", "path": "Runner/suites/Performance/Glmark2/glmark2.yaml"},
+    {"name": "Vkmark", "path": "Runner/suites/Performance/Vkmark/vkmark.yaml"}
+] %}
+
+{# GPU + CPU #}
+{% set gpu_cpu_tests = [
+    {"name": "QMLBench", "path": "Runner/suites/Performance/QMLBench/qmlbench.yaml"}
+] %}
+
+{# Real time: cyclictest under no load, under memory stress, and under glmark2 #}
+{% set rt_tests = [
+    {"name": "RT_Cyclictest_NoLoad", "path": "Runner/suites/Performance/Cyclictest_Scenarios/rt-cyclictest-noload.yaml"},
+    {"name": "RT_Cyclictest_StressNG_Mem", "path": "Runner/suites/Performance/Cyclictest_Scenarios/rt-cyclictest-stressng-mem.yaml"},
+    {"name": "RT_Cyclictest_Glmark2", "path": "Runner/suites/Performance/Cyclictest_Scenarios/rt-cyclictest-glmark2.yaml"}
+] %}
+
+{# Networking: socket latency/throughput, then HTTP load #}
+{% set network_tests = [
+    {"name": "Sockperf", "path": "Runner/suites/Performance/Sockperf/sockperf.yaml"},
+    {"name": "Wrk_HTTP", "path": "Runner/suites/Performance/Wrk_HTTP/wrk-http.yaml"}
+] %}
+
+{# Reboots the target, so it runs last #}
+{% set reboot_tests = [
     {"name": "Boot_Systemd_KPI_Loop", "path": "Runner/suites/Performance/Boot_Systemd_KPI_Loop/Boot_Systemd_KPI_Loop.yaml", "expected": ["Boot_Systemd_KPI_Loop"]}
 ] %}
+
+{% set all_tests = system_tests + cpu_tests + os_tests + memory_tests
+                   + storage_tests + scheduler_tests + graphics_tests
+                   + gpu_cpu_tests + rt_tests + network_tests + reboot_tests %}
