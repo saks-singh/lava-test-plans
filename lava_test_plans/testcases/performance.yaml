@@ -10,19 +10,34 @@
 {#                                                                            #}
 {# The benchmark suites run in the order used for platform bring-up - CPU,     #}
 {# then OS primitives, memory, storage, scheduler, graphics, GPU+CPU,          #}
-{# real-time, sockets and HTTP - with the system checks first and              #}
-{# Boot_Systemd_KPI_Loop last, since it reboots the target. The groups below    #}
-{# are concatenated into all_tests; they are separate only so each can carry    #}
-{# a comment, which Jinja does not allow inside a set expression.               #}
+{# real-time, sockets and HTTP - with the baseline readings and system checks  #}
+{# first and Boot_Systemd_KPI_Loop last, since it reboots the target. The      #}
+{# groups below are concatenated into all_tests; they are separate only so      #}
+{# each can carry a comment, which Jinja does not allow inside a set            #}
+{# expression.                                                                  #}
 {#                                                                            #}
 {# "expected" is a WHITELIST: LAVA forces any case not named in it to fail.     #}
 {# Every suite here that publishes measurements derives its case ids from the   #}
 {# tool's own output - scene names, percentiles, block sizes, thread counts,    #}
-{# which engine was resolved - so the ids are not known before the run and the  #}
-{# key must be OMITTED. It is kept only where a suite publishes a single fixed  #}
-{# verdict case. That is also why Sysbench_Performance and Tiotest no longer    #}
-{# carry one: they now publish 24 and 144 measurements respectively, and a      #}
-{# whitelist would fail every one of them.                                      #}
+{# which engine was resolved, which systemd units the image has - so the ids    #}
+{# are not known before the run and the key must be OMITTED. It is kept only    #}
+{# where a suite publishes a single fixed verdict case. That is also why        #}
+{# Sysbench_Performance and Tiotest no longer carry one: they now publish 24    #}
+{# and 144 measurements respectively, and a whitelist would fail every one of   #}
+{# them.                                                                        #}
+
+{# Baseline measurements of the booted image, before anything perturbs it.      #}
+{# Both run FIRST and deliberately so: Memory_Info's Cached counter reflects    #}
+{# whatever last touched the filesystem, so after Tiotest has written several   #}
+{# GB it would describe Tiotest instead of the image. Boot_Time_Markers reads   #}
+{# records of the boot that already happened, so it cannot drift, but it costs  #}
+{# a couple of seconds and belongs with the other baseline. Neither reboots the #}
+{# target (see Boot_Systemd_KPI_Loop at the end for that) and neither           #}
+{# allocates memory.                                                           #}
+{% set baseline_tests = [
+    {"name": "Boot_Time_Markers", "path": "Runner/suites/Performance/Boot_Time_Markers/boot-time-markers.yaml"},
+    {"name": "Memory_Info", "path": "Runner/suites/Performance/Memory_Info/memory-info.yaml"}
+] %}
 
 {# System checks that were already part of this plan #}
 {% set system_tests = [
@@ -92,6 +107,7 @@
     {"name": "Boot_Systemd_KPI_Loop", "path": "Runner/suites/Performance/Boot_Systemd_KPI_Loop/Boot_Systemd_KPI_Loop.yaml", "expected": ["Boot_Systemd_KPI_Loop"]}
 ] %}
 
-{% set all_tests = system_tests + cpu_tests + os_tests + memory_tests
-                   + storage_tests + scheduler_tests + graphics_tests
-                   + gpu_cpu_tests + rt_tests + network_tests + reboot_tests %}
+{% set all_tests = baseline_tests + system_tests + cpu_tests + os_tests
+                   + memory_tests + storage_tests + scheduler_tests
+                   + graphics_tests + gpu_cpu_tests + rt_tests + network_tests
+                   + reboot_tests %}
