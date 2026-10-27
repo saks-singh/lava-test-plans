@@ -27,16 +27,23 @@
 {# them.                                                                        #}
 
 {# Baseline measurements of the booted image, before anything perturbs it.      #}
-{# Both run FIRST and deliberately so: Memory_Info's Cached counter reflects    #}
-{# whatever last touched the filesystem, so after Tiotest has written several   #}
-{# GB it would describe Tiotest instead of the image. Boot_Time_Markers reads   #}
-{# records of the boot that already happened, so it cannot drift, but it costs  #}
-{# a couple of seconds and belongs with the other baseline. Neither reboots the #}
-{# target (see Boot_Systemd_KPI_Loop at the end for that) and neither           #}
-{# allocates memory.                                                           #}
+{# All three run FIRST and deliberately so: Memory_Info's and                   #}
+{# Memory_Snapshot's Cached, dma-buf and PSS counters reflect whatever last     #}
+{# touched the system, so after Tiotest has written several GB they would       #}
+{# describe Tiotest instead of the image. Boot_Time_Markers reads records of    #}
+{# the boot that already happened, so it cannot drift, but it costs a couple    #}
+{# of seconds and belongs with the other baseline. None of them reboots the     #}
+{# target (see Boot_Systemd_KPI_Loop at the end for that) and none allocates    #}
+{# memory - Memory_Snapshot in particular only ever reads.                      #}
+{#                                                                             #}
+{# Memory_Snapshot also writes snapshot.json against the qcom-perf-skills       #}
+{# MemorySnapshot 1.0.0 contract, so this baseline is comparable with another   #}
+{# build's baseline off the board. To bracket a workload instead, add a second  #}
+{# entry after it with params LABEL: after_test and a different OUT_DIR.        #}
 {% set baseline_tests = [
     {"name": "Boot_Time_Markers", "path": "Runner/suites/Performance/Boot_Time_Markers/boot-time-markers.yaml"},
-    {"name": "Memory_Info", "path": "Runner/suites/Performance/Memory_Info/memory-info.yaml"}
+    {"name": "Memory_Info", "path": "Runner/suites/Performance/Memory_Info/memory-info.yaml"},
+    {"name": "Memory_Snapshot", "path": "Runner/suites/Performance/Memory_Snapshot/memory-snapshot.yaml", "params": {"LABEL": "baseline"}}
 ] %}
 
 {# System checks that were already part of this plan #}
